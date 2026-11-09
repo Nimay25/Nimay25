@@ -95,7 +95,7 @@ const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 // start/end are YYYY-MM-DD. Leave end null if you're still on it.
 // logo: path (from repo root) to a square PNG/JPG/SVG; it gets embedded into the graph.
 const VENTURES = [
-  { name: "PermitBug", start: "2026-04-01", end: "2026-09-01", color: "#f7931e", logo: "assets/logos/permitbug.png" },
+  { name: "PermitBug", start: "2026-03-01", end: "2026-09-01", color: "#f7931e", logo: "assets/logos/permitbug.png" },
   { name: "Rallo",     start: "2026-07-01", end: null,         color: "#d4ec2c", logo: "assets/logos/rallo.png" },
 ];
 

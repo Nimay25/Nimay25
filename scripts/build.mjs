@@ -24,13 +24,13 @@ const THEMES = {
            base: "#58a6ff", inkShade: 0, white: "#ffffff", card: "#0a0e16", orbOp: .48, frostTop: .07, frostBot: .015, sheen: .09,
            grain: .06, rimTop: .55, rimMid: .05, rimBot: .28, edge: "#ffffff", edgeOp: .04, laneOp: .32, laneSheen: .22,
            areaOp: .8, areaFade: .55, areaSheen: .28, glowOp: .65, specOp: .55,
-           bandOp: .16, beamOp: .35, fissure: "#f2f6fa", fzOp: .8, fzColorOp: .45 },
+           bandOp: .16, beamOp: .35, wallShade: .55, lipOp: .55 },
   light: { bg: "#ffffff", text: "#1f2328", muted: "#59636e", line: "#57606a", line2: "#1f2328", up: "#1a7f37", down: "#cf222e",
            cell: "#1f2328", cellOp: [0.03, 0.06, 0.1, 0.15, 0.2], rule: "#d1d9e0", pillBg: "#f6f8fa", pillBorder: "#d1d9e0",
            base: "#0969da", inkShade: .22, white: "#ffffff", card: "#f4f7fb", orbOp: .38, frostTop: .6, frostBot: .3, sheen: .55,
            grain: .05, rimTop: 1, rimMid: .55, rimBot: .9, edge: "#1f2328", edgeOp: .1, laneOp: .3, laneSheen: .6,
            areaOp: .45, areaFade: .75, areaSheen: .5, glowOp: .35, specOp: .7,
-           bandOp: .16, beamOp: .9, fissure: "#ffffff", fzOp: .5, fzColorOp: .85 },
+           bandOp: .16, beamOp: .9, wallShade: .45, lipOp: .9 },
 };
 
 // ---------- data ----------
@@ -221,40 +221,83 @@ function graphSvg(s, th, id) {
   const headColor = anim("fill", hcV, hcT);
 
   let defs = "";
-  // the line IS the crack: walk the smooth curve, knock it into straight jagged runs,
-  // and sprout fine fissures off both sides that split open the moment the laser passes.
+  // the line IS the crack. Modeled on real fracture art: a filled body whose width keeps changing,
+  // both edges chipped independently, a darker inner wall for depth, and a few long jagged branches
+  // that taper to a hairline and fork. The body is revealed by the laser (same clip as the area);
+  // each branch grows out from its root when the laser passes.
   let cr = 90210;
   const rnd = () => ((cr = (cr * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const STEP = 5;
-  let jag = "", fiss = "", jo = 0, nextF = 6;
-  for (let sDist = 0, i = 0; sDist <= total; sDist += STEP) {
+  const P2 = (q) => `${f(q[0])},${f(q[1])}`;
+  const STEP = 2.6;
+  const ph1 = rnd() * 6, ph2 = rnd() * 6;
+  const edgeL = [], edgeR = [], wallL = [], ctr = [];
+  let jo = 0, k = 0, nextB = 30 + rnd() * 40, side = rnd() < .5 ? 1 : -1;
+  let branches = "";
+  defs += "";
+  // tapered jagged branch polygon (+ forks), grown by an expanding clip circle
+  const branch = (x, y, ang, len, w0, depth) => {
+    const pts2 = [[x, y]];
+    let a = ang, d = 0, cx = x, cy = y;
+    const bend = (rnd() - .5) * .03;
+    while (d < len) {
+      a += bend + (rnd() < .2 ? (rnd() - .5) * 1.1 : (rnd() - .5) * .35);
+      const s = 1.6 + rnd() * 2.6;
+      cx += Math.cos(a) * s; cy += Math.sin(a) * s; d += s;
+      pts2.push([cx, cy]);
+    }
+    const Ls = [], Rs = [];
+    pts2.forEach((q, i) => {
+      const p0 = pts2[Math.max(0, i - 1)], p1 = pts2[Math.min(pts2.length - 1, i + 1)];
+      const tx = p1[0] - p0[0], ty = p1[1] - p0[1], tl = Math.hypot(tx, ty) || 1;
+      const w = w0 * Math.pow(1 - i / (pts2.length - 1 || 1), 1.1) + .12;
+      Ls.push([q[0] - (ty / tl) * (w / 2 + (rnd() - .5) * .25), q[1] + (tx / tl) * (w / 2 + (rnd() - .5) * .25)]);
+      Rs.push([q[0] + (ty / tl) * (w / 2 + (rnd() - .5) * .25), q[1] - (tx / tl) * (w / 2 + (rnd() - .5) * .25)]);
+    });
+    let out = "M" + Ls.concat(Rs.reverse()).map(P2).join("L") + "Z";
+    if (depth < 2 && pts2.length > 8) {
+      const forks = depth === 0 ? (rnd() < .7 ? 1 : 0) + (rnd() < .3 ? 1 : 0) : (rnd() < .45 ? 1 : 0);
+      for (let q = 0; q < forks; q++) {
+        const j = Math.floor(pts2.length * (.3 + rnd() * .45));
+        const wj = w0 * (1 - j / pts2.length);
+        out += branch(pts2[j][0], pts2[j][1], a * 0 + Math.atan2(pts2[j + 1][1] - pts2[j][1], pts2[j + 1][0] - pts2[j][0]) + (rnd() < .5 ? -1 : 1) * (.35 + rnd() * .6),
+          len * (.3 + rnd() * .35), wj * .8, depth + 1);
+      }
+    }
+    return out;
+  };
+  let nb = 0;
+  for (let sDist = 0, i = 0; sDist <= total; sDist += STEP, k++) {
     while (i < n - 1 && cum[i + 1] < sDist) i++;
     const seg = cum[i + 1] - cum[i] || 1, u = i < n - 1 ? (sDist - cum[i]) / seg : 0;
     const a = pts[i], b = pts[Math.min(n - 1, i + 1)];
     const x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u;
-    const th0 = Math.atan2(b[1] - a[1], b[0] - a[0] || 1e-6);
-    jo = jo * .35 + (rnd() < .14 ? (rnd() - .5) * 4.4 : (rnd() - .5) * 1.4);
-    const jx = x - Math.sin(th0) * jo, jy = y + Math.cos(th0) * jo;
-    jag += `${jag ? "L" : "M"}${f(jx)},${f(jy)}`;
-    if (sDist >= nextF) {
-      nextF = sDist + 9 + rnd() * 16;
-      const side = rnd() < .5 ? -1 : 1, t = tAtIdx(i);
-      let ang = th0 + side * (.45 + rnd() * .85), fx = jx, fy = jy, d = `M${f(fx)},${f(fy)}`, mid = null;
-      const len = 4 + rnd() * (rnd() < .2 ? 20 : 11), segs = 2 + Math.floor(rnd() * 2);
-      for (let q = 0; q < segs; q++) {
-        ang += (rnd() - .5) * .7;
-        fx += Math.cos(ang) * len / segs; fy += Math.sin(ang) * len / segs;
-        d += ` L${f(fx)},${f(fy)}`;
-        if (q === 0) mid = [fx, fy, ang];
-      }
-      if (len > 9 && rnd() < .45) {
-        const ba = mid[2] + (rnd() < .5 ? -1 : 1) * (.5 + rnd() * .5), bl = len * (.3 + rnd() * .3);
-        d += ` M${f(mid[0])},${f(mid[1])} L${f(mid[0] + Math.cos(ba) * bl)},${f(mid[1] + Math.sin(ba) * bl)}`;
-      }
-      const dur = .25 + len / 60;
-      fiss += `<path class="fz" style="animation-delay:${f(t)}s;animation-duration:${f(dur)}s" pathLength="1" d="${d}"/>`;
+    const th0 = Math.atan2(b[1] - a[1], b[0] - a[0] || 1e-6), nx = -Math.sin(th0), ny = Math.cos(th0);
+    jo = jo * .6 + (rnd() < .1 ? (rnd() - .5) * 3 : (rnd() - .5) * .9);
+    const cx = x + nx * jo, cy = y + ny * jo;
+    let w = 4.3 + 2.3 * Math.sin(k * .045 + ph1) * Math.sin(k * .017 + ph2) + (rnd() - .5) * 1.1;
+    if (rnd() < .03) w *= .45;                                 // occasional pinch
+    w = Math.max(1.3, w);
+    const eL = (rnd() < .15 ? (rnd() - .5) * 2 : (rnd() - .5) * .8), eR = (rnd() < .15 ? (rnd() - .5) * 2 : (rnd() - .5) * .8);      // chipped edges
+    edgeL.push([cx + nx * (w / 2 + eL), cy + ny * (w / 2 + eL)]);
+    edgeR.push([cx - nx * (w / 2 + eR), cy - ny * (w / 2 + eR)]);
+    wallL.push([cx - nx * (w * .08), cy - ny * (w * .08)]);
+    ctr.push([cx, cy]);
+    if (sDist >= nextB && sDist < total - 8) {
+      nextB = sDist + 45 + rnd() * 65;
+      side = rnd() < .7 ? -side : side;
+      const len = 22 + rnd() * 34;
+      let ang = th0 + side * (.55 + rnd() * .75) + (rnd() - .5) * .3;
+      // near the baseline, branches go up so they never run over the month labels
+      if (cy > chB - 34 && Math.sin(ang) > -.15) { side = -side; ang = th0 - Math.abs(th0 - ang) - .2; if (Math.sin(ang) > -.15) ang = -Math.PI / 2 + (rnd() - .5) * 1.4; }
+      const t = tAtIdx(i), bid = `br-${id}-${nb++}`;
+      const sx = cx + nx * side * (w / 2 - .3), sy = cy + ny * side * (w / 2 - .3);
+      defs += `<clipPath id="${bid}"><circle cx="${f(sx)}" cy="${f(sy)}" r="0"><animate attributeName="r" from="0" to="${f(len * 1.6)}" begin="${f(t)}s" dur="${f(.35 + len / 90)}s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".2 .7 .3 1"/></circle></clipPath>`;
+      branches += `<path clip-path="url(#${bid})" d="${branch(sx, sy, ang, len, Math.min(3, w * .7), 0)}"/>`;
     }
   }
+  const body = "M" + edgeL.map(P2).join("L") + "L" + edgeR.slice().reverse().map(P2).join("L") + "Z";
+  const wall = "M" + edgeL.map(P2).join("L") + "L" + wallL.slice().reverse().map(P2).join("L") + "Z";
+  const lip = "M" + edgeR.map(P2).join("L");
 
   // venture hits are a soft ring now, no gunshot
   const impact = (cx, cy, color, t) =>
@@ -349,6 +392,7 @@ function graphSvg(s, th, id) {
   <linearGradient id="rim-${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.rimTop}"/><stop offset=".35" stop-color="#fff" stop-opacity="${th.rimMid}"/><stop offset=".7" stop-color="#fff" stop-opacity="${th.rimMid}"/><stop offset="1" stop-color="#fff" stop-opacity="${th.rimBot}"/></linearGradient>
   <linearGradient id="lsh-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.laneSheen}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
   <linearGradient id="sp-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0">${spec}</linearGradient>
+  <linearGradient id="spd-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0">${spec.replace(/stop-color="(#[0-9a-f]{6})"/g, (m, c) => `stop-color="${mix(c, "#000000", th.wallShade)}"`)}</linearGradient>
   <linearGradient id="num-${id}" x1="0" y1="0" x2="1" y2="0">${spec}</linearGradient>
   <linearGradient id="afade-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="${chB}"><stop offset="0" stop-color="${th.card}" stop-opacity="0"/><stop offset="1" stop-color="${th.card}" stop-opacity="${th.areaFade}"/></linearGradient>
   <linearGradient id="ash-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="${chB}"><stop offset="0" stop-color="#fff" stop-opacity="${th.areaSheen}"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
@@ -369,7 +413,6 @@ function graphSvg(s, th, id) {
   .drop { animation: fade .4s ease-out both; }
   .flash { opacity: 0; transform-box: fill-box; transform-origin: center; animation: flash .7s ease-out both; }
   .ring { opacity: 0; transform-box: fill-box; transform-origin: center; animation: ring 1s cubic-bezier(.1,.7,.3,1) both; }
-  .fz { stroke-dasharray: 1; animation: fz .4s cubic-bezier(.1,.8,.2,1) both; }
   .ar { animation: fade 1s ease-out ${f(T1)}s both; }
   .end { animation: pop .6s cubic-bezier(.2,1.6,.4,1) ${f(T1)}s both; transform-box: fill-box; transform-origin: center; }
   .pulse { opacity: 0; transform-box: fill-box; transform-origin: center; animation: pulse 2.2s ease-out ${f(T1 + .6)}s infinite; }
@@ -390,7 +433,6 @@ function graphSvg(s, th, id) {
   @keyframes fade { from { opacity: 0; } }
   @keyframes flash { 0% { opacity: 0; transform: scale(.2); } 12% { opacity: .95; } 100% { opacity: 0; transform: scale(1.7); } }
   @keyframes ring { 0% { opacity: 0; transform: scale(.4); } 2% { opacity: .95; transform: scale(.5); } 100% { opacity: 0; transform: scale(7); } }
-  @keyframes fz { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
   @keyframes shake { 0%,100% { transform: translate(0,0); } 15% { transform: translate(-3px,2px); } 35% { transform: translate(3px,-2px); } 55% { transform: translate(-2px,1px); } 75% { transform: translate(1px,-1px); } }
   @keyframes pulse { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(3); opacity: 0; } }
   @keyframes blink { 50% { opacity: .25; } }
@@ -422,11 +464,13 @@ ${eraSvg}
 ${guides}
 <line x1="0" y1="${chB}" x2="${W}" y2="${chB}" stroke="${th.rule}"/>
 <g clip-path="url(#rev-${id})"><path d="${area}" fill="url(#sp-${id})" fill-opacity="${th.areaOp}"/><path d="${area}" fill="url(#afade-${id})"/><path d="${area}" fill="url(#ash-${id})"/></g>
-<path id="cv-${id}" pathLength="1000" stroke-dasharray="1000" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="10" stroke-opacity="${th.glowOp}" stroke-linejoin="round" stroke-linecap="round" filter="url(#gl-${id})">${draw}</path>
-<path pathLength="1000" stroke-dasharray="1000" d="${jag}" fill="none" stroke="url(#sp-${id})" stroke-width="2.6" stroke-linejoin="miter" stroke-miterlimit="3" stroke-linecap="round">${draw}</path>
-<g class="fzs" fill="none" stroke="url(#sp-${id})" stroke-width="1.5" stroke-opacity="${th.fzColorOp}" stroke-linecap="round" stroke-linejoin="miter">${fiss}</g>
-<g class="fzs" fill="none" stroke="${th.fissure}" stroke-width=".6" stroke-opacity="${th.fzOp}" stroke-linecap="round" stroke-linejoin="miter">${fiss}</g>
-<path pathLength="1000" stroke-dasharray="1000" d="${jag}" fill="none" stroke="${th.fissure}" stroke-width=".8" stroke-linejoin="miter" stroke-linecap="round">${draw}${anim("stroke-opacity", [1, 1, th.specOp, th.specOp], [0, T1, T1 + .8, TOTAL])}</path>
+<path id="cv-${id}" pathLength="1000" stroke-dasharray="1000" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="9" stroke-opacity="${th.glowOp}" stroke-linejoin="round" stroke-linecap="round" filter="url(#gl-${id})">${draw}</path>
+<g clip-path="url(#rev-${id})">
+  <path d="${body}" fill="url(#sp-${id})"/>
+  <path d="${wall}" fill="url(#spd-${id})"/>
+  <path d="${lip}" fill="none" stroke="#fff" stroke-opacity="${th.lipOp}" stroke-width=".6" stroke-linejoin="round"/>
+</g>
+<g fill="url(#sp-${id})">${branches}</g>
 <path pathLength="1000" stroke-dasharray="34 3000" d="${line}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" filter="url(#gl-${id})" opacity="0">${anim("stroke-dashoffset", [34, 34, -966, -966], [0, T0, T1, TOTAL])}${during()}</path>
 <path pathLength="1000" stroke-dasharray="22 3000" d="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0">${anim("stroke-dashoffset", [22, 22, -978, -978], [0, T0, T1, TOTAL])}${during()}</path>
 <rect x="-1" y="${top - 6}" width="2" height="${chH + 6}" fill="url(#beam-${id})" opacity="0">${anim("x", sampX.map((x) => +x - 1), sampT)}${during()}</rect>

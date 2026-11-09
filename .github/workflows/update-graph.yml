@@ -1,0 +1,32 @@
+name: Update profile graph
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # once a day
+  workflow_dispatch:       # lets you run it by hand from the Actions tab
+  push:
+    paths: ["scripts/**"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build graph
+        env:
+          # GH_PAT (optional) also counts private-repo contributions; falls back to public only
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: node scripts/build.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add assets
+          git diff --cached --quiet || git commit -m "Update profile graph"
+          git push

@@ -15,8 +15,6 @@ Founder who builds his own products, from hardware and iOS apps to AI tools and 
   - Smart pickleball paddle sensor and iOS coaching app. Built the firmware, the app and the shot-classification work myself.
 - **Founder & CEO, PermitBug**
   - AI permit pre-screening for contractors, trained on real Denver permit rejections. Got paying subscribers within the first month by cold-calling 200+ contractors.
-- **Founder, [Veylin](https://veylin.co)**
-  - Gift jewelry brand on Shopify.
 
 #### Side builds
 

@@ -30,7 +30,7 @@ const THEMES = {
            base: "#0969da", inkShade: .22, white: "#ffffff", card: "#f4f7fb", orbOp: .38, frostTop: .6, frostBot: .3, sheen: .55,
            grain: .05, rimTop: 1, rimMid: .55, rimBot: .9, edge: "#1f2328", edgeOp: .1, laneOp: .3, laneSheen: .6,
            areaOp: .45, areaFade: .75, areaSheen: .5, glowOp: .35, specOp: .7,
-           bandOp: .16, beamOp: .9, fissure: "#2b323b", fzOp: .55, fzColorOp: .55 },
+           bandOp: .16, beamOp: .9, fissure: "#ffffff", fzOp: .5, fzColorOp: .85 },
 };
 
 // ---------- data ----------

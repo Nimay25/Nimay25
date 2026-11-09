@@ -331,7 +331,7 @@ function graphSvg(s, th, id) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}" font-family="${FONT}">
 <defs>
   <clipPath id="card-${id}"><rect width="${OW}" height="${OH}" rx="${R}"/></clipPath>
-  <clipPath id="rev-${id}"><rect x="-4" y="${top - 30}" width="${PW + 8}" height="${chH + 40}">${anim("width", sampX.map((x) => +x + 8), sampT)}</rect></clipPath>
+  <clipPath id="rev-${id}"><rect x="-4" y="${top - 30}" width="${PW + 8}" height="${chH + 40}">${anim("width", sampX.map((x, j) => (j === 0 ? 0 : +x + 8)), sampT)}</rect></clipPath>
   <filter id="orb-${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="55"/></filter>
   <filter id="gl-${id}" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
   <filter id="lz-${id}" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="7"/></filter>

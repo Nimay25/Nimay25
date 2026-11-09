@@ -103,8 +103,8 @@ const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 // start/end are YYYY-MM-DD. Leave end null if you're still on it.
 // logo: path (from repo root) to a square PNG/JPG/SVG; it gets embedded into the graph.
 const VENTURES = [
-  { name: "PermitBug", start: "2026-03-01", end: "2026-09-01", color: "#f7931e", logo: "assets/logos/permitbug.png" },
-  { name: "Rallo",     start: "2026-07-01", end: null,         color: "#d4ec2c", logo: "assets/logos/rallo.png" },
+  { name: "PermitBug", start: "2026-03-01", end: "2026-09-01", color: "#f7931e", logo: "assets/logos/permitbug.png", url: "https://permitbug.com" },
+  { name: "Rallo",     start: "2026-07-01", end: null,         color: "#d4ec2c", logo: "assets/logos/rallo.png", url: "https://rallocoach.com" },
 ];
 
 import { readFileSync, existsSync } from "node:fs";
@@ -521,11 +521,36 @@ function pillSvg(link, th) {
 </svg>`;
 }
 
+// glass link button for a venture (shown under the graph in the README, since images can't hold links)
+function venturePillSvg(v, th) {
+  const host = v.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const c = th.inkShade ? mix(v.color, "#000000", th.inkShade) : v.color;
+  const nameW = Math.ceil(v.name.length * 8.4), hostW = Math.ceil((host.length + 2) * 6.9);
+  const H = 36, W = 6 + 26 + 10 + nameW + 10 + hostW + 16;
+  const logo = logoData(v.logo);
+  const k = v.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">
+<defs>
+  <linearGradient id="f-${k}" x1="0" x2="1"><stop offset="0" stop-color="${v.color}" stop-opacity="${th.laneOp + .08}"/><stop offset="1" stop-color="${v.color}" stop-opacity="${th.laneOp * .45}"/></linearGradient>
+  <linearGradient id="s-${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.laneSheen}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <clipPath id="c-${k}"><circle cx="${6 + 13}" cy="${H / 2}" r="11"/></clipPath>
+</defs>
+<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="${H / 2 - .5}" fill="${th.card}"/>
+<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="${H / 2 - .5}" fill="url(#f-${k})"/>
+<rect x="1.5" y="1.5" width="${W - 3}" height="${H / 2 - 1}" rx="${H / 2 - 1.5}" fill="url(#s-${k})"/>
+<rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="${H / 2 - .5}" fill="none" stroke="${c}" stroke-opacity=".75"/>
+<circle cx="${6 + 13}" cy="${H / 2}" r="13" fill="${th.bg}"/>
+${logo ? `<image href="${logo}" x="${6 + 2}" y="${H / 2 - 11}" width="22" height="22" clip-path="url(#c-${k})" preserveAspectRatio="xMidYMid slice"/>` : ""}
+<text x="${6 + 26 + 10}" y="${H / 2 + 5}" font-size="14" font-weight="700" fill="${th.text}">${esc(v.name)}<tspan font-size="12" font-weight="500" fill="${th.muted}" dx="10">${esc(host)} ↗</tspan></text>
+</svg>`;
+}
+
 // ---------- main ----------
 const days = process.argv.includes("--sample") ? sampleDays() : await fetchDays();
 const s = stats(days);
 for (const [name, th] of Object.entries(THEMES)) {
   writeFileSync(new URL(`graph-${name}.svg`, OUT), graphSvg(s, th, name));
   for (const l of LINKS) writeFileSync(new URL(`pill-${l.id}-${name}.svg`, OUT), pillSvg(l, th));
+  for (const v of VENTURES) if (v.url) writeFileSync(new URL(`venture-${v.name.toLowerCase().replace(/[^a-z0-9]/g, "")}-${name}.svg`, OUT), venturePillSvg(v, th));
 }
 console.log(`${fmt(s.thisYear)} contributions in the last year · all time ${fmt(s.allTime)} · best day ${s.best}`);

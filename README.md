@@ -7,6 +7,9 @@
   <img alt="Contribution graph" src="assets/graph-light.svg" width="100%">
 </picture>
 
+<a href="https://permitbug.com"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/venture-permitbug-dark.svg"><img alt="PermitBug: permitbug.com" src="assets/venture-permitbug-light.svg"></picture></a>
+<a href="https://rallocoach.com"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/venture-rallo-dark.svg"><img alt="Rallo: rallocoach.com" src="assets/venture-rallo-light.svg"></picture></a>
+
 Founder who builds his own products, from hardware and iOS apps to AI tools and websites. Business student at the University of South Carolina's Darla Moore School of Business.
 
 #### Building

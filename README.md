@@ -11,9 +11,9 @@ Founder who builds his own products, from hardware and iOS apps to AI tools and 
 
 #### Building
 
-- **Founder, [Rallo](https://rallocoach.com)**
+- <img src="assets/logos/rallo.png" width="20" height="20" align="top" alt=""> **Founder, [Rallo](https://rallocoach.com)**
   - Smart pickleball paddle sensor and iOS coaching app. Built the firmware, the app and the shot-classification work myself.
-- **Founder & CEO, PermitBug**
+- <img src="assets/logos/permitbug.png" width="20" height="20" align="top" alt=""> **Founder & CEO, PermitBug**
   - AI permit pre-screening for contractors, trained on real Denver permit rejections. Got paying subscribers within the first month by cold-calling 200+ contractors.
 
 #### Side builds

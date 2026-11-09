@@ -388,6 +388,7 @@ function graphSvg(s, th, id) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}" font-family="${FONT}">
 <defs>
+  <clipPath id="inner-${id}"><rect x="${-P + 3}" y="${-P + 3}" width="${OW - 6}" height="${OH - 6}" rx="${R - 3}"/></clipPath>
   <clipPath id="card-${id}"><rect width="${OW}" height="${OH}" rx="${R}"/></clipPath>
   <clipPath id="rev-${id}"><rect x="-4" y="${top - 30}" width="${PW + 8}" height="${chH + 40}">${anim("width", sampX.map((x, j) => (j === 0 ? 0 : +x + 8)), sampT)}</rect></clipPath>
   <filter id="orb-${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="55"/></filter>
@@ -473,7 +474,6 @@ ${chg}
 ${eraSvg}
 ${guides}
 <line x1="0" y1="${chB}" x2="${W}" y2="${chB}" stroke="${th.rule}"/>
-${months}
 <g clip-path="url(#rev-${id})"><path d="${area}" fill="url(#sp-${id})" fill-opacity="${th.areaOp}"/><path d="${area}" fill="url(#afade-${id})"/><path d="${area}" fill="url(#ash-${id})"/></g>
 <path id="cv-${id}" pathLength="1000" stroke-dasharray="1000" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="10" stroke-opacity="${th.glowOp}" stroke-linejoin="round" stroke-linecap="round" filter="url(#gl-${id})">${draw}</path>
 <path pathLength="1000" stroke-dasharray="1000" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round">${draw}</path>
@@ -482,8 +482,9 @@ ${months}
 <path pathLength="1000" stroke-dasharray="22 3000" d="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0">${anim("stroke-dashoffset", [22, 22, -978, -978], [0, T0, T1, TOTAL])}${during()}</path>
 <rect x="-1" y="${top - 6}" width="2" height="${chH + 6}" fill="url(#beam-${id})" opacity="0">${anim("x", sampX.map((x) => +x - 1), sampT)}${during()}</rect>
 <rect x="-7" y="${top - 6}" width="14" height="${chH + 6}" fill="url(#beam-${id})" opacity="0" filter="url(#gl-${id})">${anim("x", sampX.map((x) => +x - 7), sampT)}${during(.6)}</rect>
-${impacts}
+<g clip-path="url(#inner-${id})">${impacts}</g>
 ${markers}
+${months}
 <g class="end"><circle class="pulse" cx="${ex}" cy="${ey}" r="6" fill="${last}"/><circle cx="${ex}" cy="${ey}" r="12" fill="${last}" fill-opacity=".35" filter="url(#gl-${id})"/><circle cx="${ex}" cy="${ey}" r="5" fill="${last}" stroke="#fff" stroke-width="1.5"/></g>
 <g opacity="0">${during()}
   <animateMotion dur="${TOTAL}s" keyPoints="0;0;1;1" keyTimes="${kt([0, T0, T1, TOTAL])}" calcMode="linear" fill="freeze"><mpath href="#cv-${id}"/></animateMotion>

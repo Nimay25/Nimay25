@@ -20,9 +20,15 @@ mkdirSync(OUT, { recursive: true });
 
 const THEMES = {
   dark:  { bg: "#0d1117", text: "#f0f6fc", muted: "#9198a1", line: "#e6edf3", line2: "#ffffff", up: "#3fb950", down: "#f85149",
-           cell: "#ffffff", cellOp: [0.035, 0.07, 0.11, 0.16, 0.22], rule: "#3d444d", pillBg: "#151b23", pillBorder: "#3d444d" },
+           cell: "#ffffff", cellOp: [0.035, 0.07, 0.11, 0.16, 0.22], rule: "#3d444d", pillBg: "#151b23", pillBorder: "#3d444d",
+           base: "#58a6ff", inkShade: 0, white: "#ffffff", card: "#0a0e16", orbOp: .48, frostTop: .07, frostBot: .015, sheen: .09,
+           grain: .06, rimTop: .55, rimMid: .05, rimBot: .28, edge: "#ffffff", edgeOp: .04, laneOp: .32, laneSheen: .22,
+           areaOp: .8, areaFade: .55, areaSheen: .28, glowOp: .65, specOp: .55 },
   light: { bg: "#ffffff", text: "#1f2328", muted: "#59636e", line: "#57606a", line2: "#1f2328", up: "#1a7f37", down: "#cf222e",
-           cell: "#1f2328", cellOp: [0.03, 0.06, 0.1, 0.15, 0.2], rule: "#d1d9e0", pillBg: "#f6f8fa", pillBorder: "#d1d9e0" },
+           cell: "#1f2328", cellOp: [0.03, 0.06, 0.1, 0.15, 0.2], rule: "#d1d9e0", pillBg: "#f6f8fa", pillBorder: "#d1d9e0",
+           base: "#0969da", inkShade: .22, white: "#ffffff", card: "#f4f7fb", orbOp: .38, frostTop: .6, frostBot: .3, sheen: .55,
+           grain: .05, rimTop: 1, rimMid: .55, rimBot: .9, edge: "#1f2328", edgeOp: .1, laneOp: .3, laneSheen: .6,
+           areaOp: .45, areaFade: .75, areaSheen: .5, glowOp: .35, specOp: .7 },
 };
 
 // ---------- data ----------
@@ -108,18 +114,28 @@ function logoData(path) {
   return `data:${mime};base64,${readFileSync(p).toString("base64")}`;
 }
 
+// blend hex `a` toward hex `b` by t (0..1)
+const mix = (a, b, t) => {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
+};
+
 function graphSvg(s, th, id) {
+  const P = 30, R = 28;                                   // glass padding + corner radius
   const W = 840, days = s.window, n = days.length;
   const top = 124, chH = 150, chB = top + chH;
   const laneTop = chB + 40, laneH = 30, laneGap = 10;
   const lanesH = VENTURES.length * (laneH + laneGap);
   const statsY = laneTop + lanesH + 22;
   const H = statsY + 62;
+  const OW = W + P * 2, OH = H + P * 2;
 
   const t0 = new Date(days[0].date).getTime(), t1 = new Date(days[n - 1].date).getTime();
   const xOf = (date) => Math.max(0, Math.min(W, ((new Date(date).getTime() - t0) / (t1 - t0)) * W));
+  const ink = (c) => (th.inkShade ? mix(c, "#000000", th.inkShade) : c);
 
-  // 10-day rolling average, smoothed curve + gradient area
+  // 10-day rolling average, smoothed curve + area
   const roll = days.map((_, i) => {
     const w = days.slice(Math.max(0, i - 9), i + 1);
     return w.reduce((a, d) => a + d.count, 0) / w.length;
@@ -137,11 +153,23 @@ function graphSvg(s, th, id) {
   const [ex, ey] = pts[n - 1];
   const yAtDate = (date) => pts[Math.min(n - 1, Math.round((xOf(date) / W) * (n - 1)))][1];
 
+  // the spectrum: base blue drifts into each venture's color as it starts
+  const vs = [...VENTURES].sort((a, b) => a.start.localeCompare(b.start));
+  const off = (x) => Math.max(0, Math.min(1, x)).toFixed(3);
+  let spec = `<stop offset="0" stop-color="${th.base}"/>`;
+  vs.forEach((v, i) => {
+    const o = xOf(v.start) / W;
+    if (i > 0) spec += `<stop offset="${off(Math.max(xOf(vs[i - 1].start) / W, o - 0.07))}" stop-color="${ink(vs[i - 1].color)}"/>`;
+    spec += `<stop offset="${off(o)}" stop-color="${ink(v.color)}"/>`;
+  });
+  const last = vs.length ? ink(vs[vs.length - 1].color) : th.base;
+  spec += `<stop offset="1" stop-color="${last}"/>`;
+
   // horizontal guides + month labels
   let guides = "";
   for (let k = 1; k <= 3; k++) {
     const y = top + (chH * k) / 4;
-    guides += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${th.rule}" stroke-opacity=".5" stroke-dasharray="1 5"/>`;
+    guides += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${th.rule}" stroke-opacity=".45" stroke-dasharray="1 5"/>`;
   }
   let months = "";
   days.forEach((d, i) => {
@@ -152,79 +180,115 @@ function graphSvg(s, th, id) {
     }
   });
 
-  // ventures: marker on the curve + lane underneath
-  let defs = "", markers = "", lanes = "";
+  // ventures: marker on the curve + glass lane underneath
+  let defs = "", markers = "", lanes = "", orbs = "";
+  orbs += `<circle class="o o0" cx="${P + 60}" cy="${P + 120}" r="170" fill="${th.base}"/>`;
   VENTURES.forEach((v, i) => {
+    const c = ink(v.color);
     const sx = xOf(v.start), exv = v.end ? xOf(v.end) : W;
     const ly = laneTop + i * (laneH + laneGap), cyL = ly + laneH / 2;
     const logo = logoData(v.logo);
     const clip = `c-${id}-${i}`;
+    orbs += `<circle class="o o${i + 1}" cx="${P + (sx + exv) / 2}" cy="${P + (i % 2 ? top + 70 : top - 10)}" r="${170 - i * 20}" fill="${v.color}"/>`;
     defs += `<clipPath id="${clip}"><circle cx="${sx + laneH / 2}" cy="${cyL}" r="${laneH / 2 - 3}"/></clipPath>`;
-    defs += `<linearGradient id="lg-${id}-${i}" x1="0" x2="1"><stop offset="0" stop-color="${v.color}" stop-opacity=".35"/><stop offset="1" stop-color="${v.color}" stop-opacity="${v.end ? .35 : .04}"/></linearGradient>`;
+    defs += `<linearGradient id="lg-${id}-${i}" x1="0" x2="1"><stop offset="0" stop-color="${v.color}" stop-opacity="${th.laneOp}"/><stop offset="1" stop-color="${v.color}" stop-opacity="${v.end ? th.laneOp : .04}"/></linearGradient>`;
 
     const my = yAtDate(v.start);
-    markers += `<line x1="${sx}" y1="${my}" x2="${sx}" y2="${ly}" stroke="${v.color}" stroke-opacity=".55" stroke-dasharray="3 3"/>`;
-    markers += `<circle cx="${sx}" cy="${my}" r="9" fill="${v.color}" fill-opacity=".18"/><circle cx="${sx}" cy="${my}" r="4" fill="${v.color}" stroke="${th.bg}" stroke-width="1.5"/>`;
+    markers += `<line x1="${sx}" y1="${my}" x2="${sx}" y2="${ly}" stroke="${c}" stroke-opacity=".6" stroke-dasharray="3 3"/>`;
+    markers += `<circle cx="${sx}" cy="${my}" r="11" fill="${c}" fill-opacity=".2" filter="url(#gl-${id})"/><circle cx="${sx}" cy="${my}" r="4.5" fill="${c}" stroke="${th.white}" stroke-opacity=".9" stroke-width="1.5"/>`;
 
     const bw = Math.max(laneH, exv - sx);
     const startLbl = new Date(v.start + "T12:00:00Z").toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
     const endLbl = v.end ? new Date(v.end + "T12:00:00Z").toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : "now";
-    const nameX = sx + laneH + 6;
-    const meta = `${startLbl} → ${endLbl}`;
-    // put the label outside the bar if the bar is too short
     const inside = bw > 190;
-    lanes += `<rect x="${sx}" y="${ly}" width="${bw}" height="${laneH}" rx="${laneH / 2}" fill="url(#lg-${id}-${i})" stroke="${v.color}" stroke-opacity=".6"/>`;
+    lanes += `<rect x="${sx}" y="${ly}" width="${bw}" height="${laneH}" rx="${laneH / 2}" fill="url(#lg-${id}-${i})"/>`;
+    lanes += `<rect x="${sx + 1}" y="${ly + 1}" width="${bw - 2}" height="${laneH / 2}" rx="${laneH / 2 - 1}" fill="url(#lsh-${id})"/>`;
+    lanes += `<rect x="${sx + .5}" y="${ly + .5}" width="${bw - 1}" height="${laneH - 1}" rx="${laneH / 2 - .5}" fill="none" stroke="${c}" stroke-opacity=".7"/>`;
     lanes += logo
       ? `<circle cx="${sx + laneH / 2}" cy="${cyL}" r="${laneH / 2 - 2}" fill="${th.bg}"/><image href="${logo}" x="${sx + 3}" y="${ly + 3}" width="${laneH - 6}" height="${laneH - 6}" clip-path="url(#${clip})" preserveAspectRatio="xMidYMid slice"/>`
       : `<circle cx="${sx + laneH / 2}" cy="${cyL}" r="${laneH / 2 - 3}" fill="${v.color}"/><text x="${sx + laneH / 2}" y="${cyL + 4.5}" font-size="13" font-weight="700" fill="${th.bg}" text-anchor="middle">${esc(v.name[0])}</text>`;
-    const tx = inside ? nameX : sx + bw + 10;
-    lanes += `<text x="${tx}" y="${cyL + 4.5}" font-size="13" font-weight="700" fill="${th.text}">${esc(v.name)}<tspan font-weight="400" fill="${th.muted}" dx="8" font-size="11.5">${meta}</tspan></text>`;
-    if (!v.end) lanes += `<circle class="live" cx="${W - 12}" cy="${cyL}" r="3.5" fill="${v.color}"/>`;
+    const tx = inside ? sx + laneH + 6 : sx + bw + 10;
+    lanes += `<text x="${tx}" y="${cyL + 4.5}" font-size="13" font-weight="700" fill="${th.text}">${esc(v.name)}<tspan font-weight="400" fill="${th.muted}" dx="8" font-size="11.5">${startLbl} → ${endLbl}</tspan></text>`;
+    if (!v.end) lanes += `<circle class="live" cx="${W - 12}" cy="${cyL}" r="3.5" fill="${c}"/>`;
   });
 
   const chg = s.change === null ? "" : (() => {
     const up = s.change >= 0, txt = `${up ? "▲" : "▼"} ${fmt(Math.abs(Math.round(s.change)))}% vs last year`;
     const w = txt.length * 6.9 + 22, c = up ? th.up : th.down;
-    return `<rect x="0" y="78" width="${w}" height="24" rx="12" fill="${c}" fill-opacity=".14"/><text x="11" y="94.5" font-size="12.5" font-weight="600" fill="${c}">${txt}</text>`;
+    return `<rect x=".5" y="78.5" width="${w}" height="24" rx="12" fill="${c}" fill-opacity=".14" stroke="${c}" stroke-opacity=".35"/><text x="11" y="95" font-size="12.5" font-weight="600" fill="${c}">${txt}</text>`;
   })();
 
   const stat = (x, label, val) =>
     `<text x="${x}" y="${statsY + 18}" font-size="11" fill="${th.muted}" letter-spacing=".6">${label.toUpperCase()}</text>` +
     `<text x="${x}" y="${statsY + 44}" font-size="20" font-weight="700" fill="${th.text}">${val}</text>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}" font-family="${FONT}">
 <defs>
-  <linearGradient id="ar-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${th.line}" stop-opacity=".38"/><stop offset="1" stop-color="${th.line}" stop-opacity="0"/></linearGradient>
-  <linearGradient id="ln-${id}" x1="0" x2="1"><stop offset="0" stop-color="${th.line}" stop-opacity=".45"/><stop offset=".6" stop-color="${th.line}"/><stop offset="1" stop-color="${th.line2}"/></linearGradient>
+  <clipPath id="card-${id}"><rect width="${OW}" height="${OH}" rx="${R}"/></clipPath>
+  <filter id="orb-${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="55"/></filter>
+  <filter id="gl-${id}" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
+  <filter id="grain-${id}"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 ${th.grain}"/></feComponentTransfer></filter>
+  <linearGradient id="frost-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.frostTop}"/><stop offset="1" stop-color="#fff" stop-opacity="${th.frostBot}"/></linearGradient>
+  <linearGradient id="sheen-${id}" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.sheen}"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="rim-${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.rimTop}"/><stop offset=".35" stop-color="#fff" stop-opacity="${th.rimMid}"/><stop offset=".7" stop-color="#fff" stop-opacity="${th.rimMid}"/><stop offset="1" stop-color="#fff" stop-opacity="${th.rimBot}"/></linearGradient>
+  <linearGradient id="lsh-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${th.laneSheen}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="sp-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0">${spec}</linearGradient>
+  <linearGradient id="num-${id}" x1="0" y1="0" x2="1" y2="0">${spec}</linearGradient>
+  <linearGradient id="afade-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="${chB}"><stop offset="0" stop-color="${th.card}" stop-opacity="0"/><stop offset="1" stop-color="${th.card}" stop-opacity="${th.areaFade}"/></linearGradient>
+  <linearGradient id="ash-${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="${chB}"><stop offset="0" stop-color="#fff" stop-opacity="${th.areaSheen}"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
   ${defs}
 </defs>
 <style>
-  .ln { stroke-dasharray:5000; stroke-dashoffset:5000; animation: draw 2.4s ease-out forwards; }
-  .ar { opacity:0; animation: fade 1s ease-out 1.2s forwards; }
-  .end { opacity:0; animation: fade .3s ease-out 2.3s forwards; }
+  .ln { stroke-dasharray:5000; stroke-dashoffset:5000; animation: draw 2.6s cubic-bezier(.3,.7,.2,1) forwards; }
+  .ar { opacity:0; animation: fade 1.2s ease-out 1.1s forwards; }
+  .end { opacity:0; animation: fade .4s ease-out 2.4s forwards; }
+  .pulse { transform-box:fill-box; transform-origin:center; opacity:0; animation: pulse 2.2s ease-out 2.6s infinite; }
   .live { animation: blink 1.6s ease-in-out infinite; }
+  .o { transform-box:fill-box; transform-origin:center; }
+  .o0 { animation: d0 14s ease-in-out infinite; }
+  .o1 { animation: d1 17s ease-in-out infinite; }
+  .o2 { animation: d2 12s ease-in-out infinite; }
+  .o3 { animation: d0 19s ease-in-out infinite reverse; }
   @keyframes draw { to { stroke-dashoffset:0; } }
   @keyframes fade { to { opacity:1; } }
   @keyframes blink { 50% { opacity:.25; } }
+  @keyframes pulse { 0% { transform:scale(.6); opacity:.8; } 100% { transform:scale(3); opacity:0; } }
+  @keyframes d0 { 50% { transform:translate(60px,30px) scale(1.15); } }
+  @keyframes d1 { 50% { transform:translate(-50px,-25px) scale(.9); } }
+  @keyframes d2 { 50% { transform:translate(-40px,35px) scale(1.12); } }
 </style>
+<g clip-path="url(#card-${id})">
+  <rect width="${OW}" height="${OH}" fill="${th.card}"/>
+  <g filter="url(#orb-${id})" opacity="${th.orbOp}">${orbs}</g>
+  <rect width="${OW}" height="${OH}" fill="url(#frost-${id})"/>
+  <rect width="${OW}" height="${OH}" filter="url(#grain-${id})"/>
+  <rect width="${OW}" height="${OH}" fill="url(#sheen-${id})"/>
+</g>
+<rect x=".5" y=".5" width="${OW - 1}" height="${OH - 1}" rx="${R - .5}" fill="none" stroke="${th.edge}" stroke-opacity="${th.edgeOp}"/>
+<rect x="1.25" y="1.25" width="${OW - 2.5}" height="${OH - 2.5}" rx="${R - 1.25}" fill="none" stroke="url(#rim-${id})" stroke-width="1.5"/>
+<g transform="translate(${P} ${P})">
 <text x="0" y="18" font-size="11" font-weight="600" fill="${th.muted}" letter-spacing="1.5">SHIPPING LOG · LAST 12 MONTHS</text>
 <text x="${W}" y="18" font-size="11" fill="${th.muted}" text-anchor="end">updated ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</text>
 <text x="${W}" y="36" font-size="11" fill="${th.muted}" text-anchor="end">Business student who builds things</text>
-<text x="0" y="66" font-size="38" font-weight="800" fill="${th.text}" letter-spacing="-1">${fmt(s.thisYear)}<tspan font-size="14" font-weight="400" fill="${th.muted}" dx="10" letter-spacing="0">contributions</tspan></text>
+<text x="0" y="66" font-size="40" font-weight="800" fill="url(#num-${id})" letter-spacing="-1.2">${fmt(s.thisYear)}</text>
+<text x="${String(fmt(s.thisYear)).length * 23 + 10}" y="66" font-size="14" fill="${th.muted}">contributions</text>
 ${chg}
 ${guides}
 <line x1="0" y1="${chB}" x2="${W}" y2="${chB}" stroke="${th.rule}"/>
 ${months}
-<path class="ar" d="${area}" fill="url(#ar-${id})"/>
-<path class="ln" d="${line}" fill="none" stroke="url(#ln-${id})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<g class="ar"><path d="${area}" fill="url(#sp-${id})" fill-opacity="${th.areaOp}"/><path d="${area}" fill="url(#afade-${id})"/><path d="${area}" fill="url(#ash-${id})"/></g>
+<path class="ln" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="9" stroke-opacity="${th.glowOp}" stroke-linejoin="round" stroke-linecap="round" filter="url(#gl-${id})"/>
+<path class="ln" d="${line}" fill="none" stroke="url(#sp-${id})" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>
+<path class="ln" d="${line}" fill="none" stroke="#fff" stroke-opacity="${th.specOp}" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" transform="translate(0 -1)"/>
 ${markers}
-<g class="end"><circle cx="${ex}" cy="${ey}" r="10" fill="${th.line2}" fill-opacity=".2"/><circle cx="${ex}" cy="${ey}" r="4.5" fill="${th.line2}"/></g>
+<g class="end"><circle class="pulse" cx="${ex}" cy="${ey}" r="6" fill="${last}"/><circle cx="${ex}" cy="${ey}" r="12" fill="${last}" fill-opacity=".35" filter="url(#gl-${id})"/><circle cx="${ex}" cy="${ey}" r="5" fill="${last}" stroke="#fff" stroke-width="1.5"/></g>
 ${lanes}
 <line x1="0" y1="${statsY}" x2="${W}" y2="${statsY}" stroke="${th.rule}"/>
 ${stat(0, "All time", fmt(s.allTime))}
 ${stat(210, "Last 90 days", fmt(s.last90))}
 ${stat(420, "Daily avg · 90d", fmt(s.avg90))}
 ${stat(630, "Best day", fmt(s.best))}
+</g>
 </svg>`;
 }
 

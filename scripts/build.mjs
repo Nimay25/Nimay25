@@ -379,6 +379,7 @@ function graphSvg(s, th, id) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}" font-family="${FONT}">
 <defs>
+  <clipPath id="chart-${id}"><rect x="0" y="${top - 2}" width="${PW + 4}" height="${chH + 4}"/></clipPath>
   <clipPath id="inner-${id}"><rect x="${-P + 3}" y="${-P + 3}" width="${OW - 6}" height="${OH - 6}" rx="${R - 3}"/></clipPath>
   <clipPath id="card-${id}"><rect width="${OW}" height="${OH}" rx="${R}"/></clipPath>
   <clipPath id="rev-${id}"><rect x="-4" y="${top - 30}" width="${PW + 8}" height="${chH + 40}">${anim("width", sampX.map((x, j) => (j === 0 ? 0 : +x + 8)), sampT)}</rect></clipPath>
@@ -470,7 +471,7 @@ ${guides}
   <path d="${wall}" fill="url(#spd-${id})"/>
   <path d="${lip}" fill="none" stroke="#fff" stroke-opacity="${th.lipOp}" stroke-width=".6" stroke-linejoin="round"/>
 </g>
-<g fill="url(#sp-${id})">${branches}</g>
+<g clip-path="url(#chart-${id})"><g fill="url(#sp-${id})">${branches}</g></g>
 <path pathLength="1000" stroke-dasharray="34 3000" d="${line}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" filter="url(#gl-${id})" opacity="0">${anim("stroke-dashoffset", [34, 34, -966, -966], [0, T0, T1, TOTAL])}${during()}</path>
 <path pathLength="1000" stroke-dasharray="22 3000" d="${line}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0">${anim("stroke-dashoffset", [22, 22, -978, -978], [0, T0, T1, TOTAL])}${during()}</path>
 <rect x="-1" y="${top - 6}" width="2" height="${chH + 6}" fill="url(#beam-${id})" opacity="0">${anim("x", sampX.map((x) => +x - 1), sampT)}${during()}</rect>

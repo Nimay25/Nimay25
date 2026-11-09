@@ -24,13 +24,13 @@ const THEMES = {
            base: "#58a6ff", inkShade: 0, white: "#ffffff", card: "#0a0e16", orbOp: .48, frostTop: .07, frostBot: .015, sheen: .09,
            grain: .06, rimTop: .55, rimMid: .05, rimBot: .28, edge: "#ffffff", edgeOp: .04, laneOp: .32, laneSheen: .22,
            areaOp: .8, areaFade: .55, areaSheen: .28, glowOp: .65, specOp: .55,
-           bandOp: .16, beamOp: .35, crack: "#ffffff", crackOp: .22 },
+           bandOp: .16, beamOp: .35, crack: "#eef3f8", crackOp: .62, crackShadow: .55, crackGlint: .5 },
   light: { bg: "#ffffff", text: "#1f2328", muted: "#59636e", line: "#57606a", line2: "#1f2328", up: "#1a7f37", down: "#cf222e",
            cell: "#1f2328", cellOp: [0.03, 0.06, 0.1, 0.15, 0.2], rule: "#d1d9e0", pillBg: "#f6f8fa", pillBorder: "#d1d9e0",
            base: "#0969da", inkShade: .22, white: "#ffffff", card: "#f4f7fb", orbOp: .38, frostTop: .6, frostBot: .3, sheen: .55,
            grain: .05, rimTop: 1, rimMid: .55, rimBot: .9, edge: "#1f2328", edgeOp: .1, laneOp: .3, laneSheen: .6,
            areaOp: .45, areaFade: .75, areaSheen: .5, glowOp: .35, specOp: .7,
-           bandOp: .16, beamOp: .9, crack: "#1f2328", crackOp: .16 },
+           bandOp: .16, beamOp: .9, crack: "#ffffff", crackOp: .8, crackShadow: .35, crackGlint: .9 },
 };
 
 // ---------- data ----------
@@ -220,35 +220,93 @@ function graphSvg(s, th, id) {
   hcT.push(TOTAL); hcV.push(last);
   const headColor = anim("fill", hcV, hcT);
 
-  // deterministic jagged cracks radiating from an impact point
-  const cracks = (cx, cy, seed, reach) => {
+  let defs = "";
+  // realistic impact fracture: jagged tapered radials, branches, spiderweb ring cracks, a pit in the middle.
+  // It grows out from the impact point (a clip circle expands) when the laser hits.
+  let crackN = 0;
+  const fracture = (cx, cy, seed, reach, t) => {
     let r = seed >>> 0;
     const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 4294967296);
-    let d = "";
-    const count = 7;
-    for (let k = 0; k < count; k++) {
-      let a = (k / count) * Math.PI * 2 + rnd() * .6, x = cx, y = cy;
-      d += `M${f(x)},${f(y)}`;
-      const segs = 3 + Math.floor(rnd() * 2), len = reach * (.55 + rnd() * .6);
-      let mid = null;
-      for (let q = 0; q < segs; q++) {
-        a += (rnd() - .5) * .8;
-        x += Math.cos(a) * len / segs; y += Math.sin(a) * len / segs;
-        d += ` L${f(x)},${f(y)}`;
-        if (q === 1) mid = [x, y, a];
+    const walk = (x, y, a, len, wobble) => {
+      const p = [[x, y]];
+      let dir = a, d = 0;
+      while (d < len) {
+        // glass breaks in straight runs with sudden kinks, not smooth wiggles
+        dir += (rnd() < .22 ? (rnd() - .5) * wobble : (rnd() - .5) * .1) + (a - dir) * .08;
+        const s = 4 + rnd() * 9;
+        x += Math.cos(dir) * s; y += Math.sin(dir) * s; d += s;
+        p.push([x, y]);
       }
-      if (mid && rnd() > .35) {
-        const ba = mid[2] + (rnd() > .5 ? 1 : -1) * (.6 + rnd() * .5), bl = len * .35;
-        d += ` M${f(mid[0])},${f(mid[1])} L${f(mid[0] + Math.cos(ba) * bl)},${f(mid[1] + Math.sin(ba) * bl)}`;
+      return p;
+    };
+    const taper = (p, w0) => {
+      const L = [], Rr = [];
+      p.forEach((q, i) => {
+        const a = p[Math.max(0, i - 1)], b = p[Math.min(p.length - 1, i + 1)];
+        const tx = b[0] - a[0], ty = b[1] - a[1], tl = Math.hypot(tx, ty) || 1;
+        const w = w0 * Math.pow(1 - i / (p.length - 1 || 1), .8) * (.85 + rnd() * .3) + .1;
+        L.push([q[0] - (ty / tl) * w / 2, q[1] + (tx / tl) * w / 2]);
+        Rr.push([q[0] + (ty / tl) * w / 2, q[1] - (tx / tl) * w / 2]);
+      });
+      return "M" + L.concat(Rr.reverse()).map(([x, y]) => `${f(x)},${f(y)}`).join("L") + "Z";
+    };
+    const poly = (p) => "M" + p.map(([x, y]) => `${f(x)},${f(y)}`).join("L");
+    const radials = [];
+    let shapes = "", glints = "", rings = "";
+    const N = 10 + Math.floor(rnd() * 4);
+    for (let k = 0; k < N; k++) {
+      const a = (k / N) * Math.PI * 2 + (rnd() - .5) * .45;
+      const len = reach * (.45 + rnd() * .75);
+      const p = walk(cx, cy, a, len, .8);
+      radials.push(p);
+      shapes += taper(p, 1.1 + rnd() * .9);
+      glints += poly(p);
+      if (rnd() < .4 && p.length > 3) {
+        const j = Math.floor(p.length * (.35 + rnd() * .3));
+        const bp = walk(p[j][0], p[j][1], a + (rnd() > .5 ? 1 : -1) * (.45 + rnd() * .5), len * (.25 + rnd() * .3), .7);
+        shapes += taper(bp, .65);
       }
     }
-    return d;
+    // spiderweb: short jagged links between neighbouring radials at two radii
+    [.2, .42].forEach((rr) => {
+      for (let k = 0; k < N; k++) {
+        if (rnd() < .3) continue;
+        const A = radials[k], B = radials[(k + 1) % N];
+        const ia = Math.min(A.length - 1, Math.round(A.length * rr * (.85 + rnd() * .3)));
+        const ib = Math.min(B.length - 1, Math.round(B.length * rr * (.85 + rnd() * .3)));
+        const [x0, y0] = A[ia], [x1, y1] = B[ib];
+        let d = `M${f(x0)},${f(y0)}`;
+        const segs = 3 + Math.floor(rnd() * 3);
+        for (let q = 1; q <= segs; q++) {
+          const u = q / segs, sag = Math.sin(u * Math.PI) * .12;
+          const mx = x0 + (x1 - x0) * u - (x0 + x1 - 2 * cx) * sag / 2, my = y0 + (y1 - y0) * u - (y0 + y1 - 2 * cy) * sag / 2;
+          d += ` L${f(mx + (q < segs ? (rnd() - .5) * 2.4 : 0))},${f(my + (q < segs ? (rnd() - .5) * 2.4 : 0))}`;
+        }
+        rings += d;
+      }
+    });
+    // the pit: a small irregular shattered star
+    let pit = "";
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2, rr = (k % 2 ? 1.6 : 3.6) + rnd() * 1.4;
+      pit += `${k ? "L" : "M"}${f(cx + Math.cos(a) * rr)},${f(cy + Math.sin(a) * rr)}`;
+    }
+    const cid = `ck-${id}-${crackN++}`;
+    defs += `<clipPath id="${cid}"><circle cx="${f(cx)}" cy="${f(cy)}" r="0"><animate attributeName="r" from="0" to="${reach * 1.35}" begin="${f(t)}s" dur=".28s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".1 .8 .2 1"/></circle></clipPath>`;
+    return `<g class="crk" style="animation-delay:${f(t)}s" clip-path="url(#${cid})">` +
+      `<path d="${shapes}" fill="#000" fill-opacity="${th.crackShadow}" transform="translate(.7 .9)"/>` +
+      `<path d="${rings}" fill="none" stroke="#000" stroke-opacity="${th.crackShadow}" stroke-width=".9" transform="translate(.6 .8)"/>` +
+      `<path d="${shapes}" fill="${th.crack}"/>` +
+      `<path d="${rings}" fill="none" stroke="${th.crack}" stroke-width=".55" stroke-linejoin="round"/>` +
+      `<path d="${glints}" fill="none" stroke="#fff" stroke-opacity="${th.crackGlint}" stroke-width=".35" transform="translate(-.6 -.5)"/>` +
+      `<path d="${pit}Z" fill="${th.crack}"/><circle cx="${f(cx)}" cy="${f(cy)}" r="1.4" fill="#fff"/>` +
+      `</g>`;
   };
   const impact = (cx, cy, color, t, seed, big = false) =>
     `<circle class="flash" style="animation-delay:${f(t)}s" cx="${f(cx)}" cy="${f(cy)}" r="${big ? 34 : 24}" fill="#fff" filter="url(#lz-${id})"/>` +
     `<circle class="ring" style="animation-delay:${f(t)}s" cx="${f(cx)}" cy="${f(cy)}" r="9" fill="none" stroke="${color}" stroke-width="2"/>` +
     `<circle class="ring" style="animation-delay:${f(t + .12)}s" cx="${f(cx)}" cy="${f(cy)}" r="6" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="1"/>` +
-    `<path class="crack" style="animation-delay:${f(t)}s" pathLength="1" d="${cracks(cx, cy, seed, big ? 52 : 40)}" fill="none" stroke="${th.crack}" stroke-width=".9" stroke-linecap="round"/>`;
+    fracture(cx, cy, seed, big ? 58 : 46, t);
 
   // eras: BEFORE, then each venture, each lights up as the laser enters it
   const eras = [{ name: "BEFORE", from: 0, to: vs.length ? xOf(vs[0].start) : W, color: th.base }]
@@ -273,12 +331,12 @@ function graphSvg(s, th, id) {
     if (d.date.endsWith("-01")) {
       const x = (i / (n - 1)) * W;
       const label = new Date(d.date + "T12:00:00Z").toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-      months += `<text class="mo" style="animation-delay:${f(tAtIdx(i) - .1)}s" x="${x.toFixed(1)}" y="${chB + 20}" font-size="11" fill="${th.muted}" text-anchor="middle">${label}</text>`;
+      months += `<text class="mo" style="animation-delay:${f(tAtIdx(i) - .1)}s" x="${x.toFixed(1)}" y="${chB + 20}" font-size="11" font-weight="600" fill="${th.text}" fill-opacity=".72" stroke="${th.card}" stroke-opacity=".7" stroke-width="3" stroke-linejoin="round" paint-order="stroke" text-anchor="middle">${label}</text>`;
     }
   });
 
   // ventures: marker + impact on the curve, glass lane underneath
-  let defs = "", markers = "", lanes = "", orbs = "", impacts = "";
+  let markers = "", lanes = "", orbs = "", impacts = "";
   const shakes = [];
   orbs += `<circle class="o o0" cx="${P + 60}" cy="${P + 120}" r="170" fill="${th.base}"/>`;
   VENTURES.forEach((v, i) => {
@@ -294,7 +352,7 @@ function graphSvg(s, th, id) {
     defs += `<linearGradient id="lg-${id}-${i}" x1="0" x2="1"><stop offset="0" stop-color="${v.color}" stop-opacity="${th.laneOp}"/><stop offset="1" stop-color="${v.color}" stop-opacity="${v.end ? th.laneOp : .04}"/></linearGradient>`;
 
     impacts += impact(sx, my, c, t, 977 * (i + 3) + 13);
-    markers += `<line class="drop" style="animation-delay:${f(t + .1)}s" x1="${sx}" y1="${my}" x2="${sx}" y2="${ly}" stroke="${c}" stroke-opacity=".6" stroke-dasharray="3 3"/>`;
+    markers += `<g class="drop" style="animation-delay:${f(t + .1)}s" stroke="${c}" stroke-opacity=".6" stroke-dasharray="3 3"><line x1="${sx}" y1="${my}" x2="${sx}" y2="${chB + 6}"/><line x1="${sx}" y1="${chB + 27}" x2="${sx}" y2="${ly}"/></g>`;
     markers += `<g class="pop" style="animation-delay:${f(t)}s"><circle cx="${sx}" cy="${my}" r="11" fill="${c}" fill-opacity=".25" filter="url(#gl-${id})"/><circle cx="${sx}" cy="${my}" r="4.5" fill="${c}" stroke="${th.white}" stroke-opacity=".9" stroke-width="1.5"/></g>`;
 
     const bw = Math.max(laneH, exv - sx);
@@ -362,7 +420,7 @@ function graphSvg(s, th, id) {
   .drop { animation: fade .4s ease-out both; }
   .flash { opacity: 0; transform-box: fill-box; transform-origin: center; animation: flash .7s ease-out both; }
   .ring { opacity: 0; transform-box: fill-box; transform-origin: center; animation: ring 1s cubic-bezier(.1,.7,.3,1) both; }
-  .crack { stroke-dasharray: 1; stroke-opacity: ${th.crackOp}; animation: crack 1.4s cubic-bezier(.1,.8,.2,1) both; }
+  .crk { opacity: ${th.crackOp}; animation: crk 1.6s ease-out both; }
   .shk { animation: ${shakeCss}; }
   .ar { animation: fade 1s ease-out ${f(T1)}s both; }
   .end { animation: pop .6s cubic-bezier(.2,1.6,.4,1) ${f(T1)}s both; transform-box: fill-box; transform-origin: center; }
@@ -384,7 +442,7 @@ function graphSvg(s, th, id) {
   @keyframes fade { from { opacity: 0; } }
   @keyframes flash { 0% { opacity: 0; transform: scale(.2); } 12% { opacity: .95; } 100% { opacity: 0; transform: scale(1.7); } }
   @keyframes ring { 0% { opacity: 0; transform: scale(.4); } 2% { opacity: .95; transform: scale(.5); } 100% { opacity: 0; transform: scale(7); } }
-  @keyframes crack { 0% { stroke-dashoffset: 1; stroke-opacity: 1; } 22% { stroke-dashoffset: 0; stroke-opacity: 1; } 100% { stroke-dashoffset: 0; stroke-opacity: ${th.crackOp}; } }
+  @keyframes crk { 0%, 25% { opacity: 1; } 100% { opacity: ${th.crackOp}; } }
   @keyframes shake { 0%,100% { transform: translate(0,0); } 15% { transform: translate(-3px,2px); } 35% { transform: translate(3px,-2px); } 55% { transform: translate(-2px,1px); } 75% { transform: translate(1px,-1px); } }
   @keyframes pulse { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(3); opacity: 0; } }
   @keyframes blink { 50% { opacity: .25; } }

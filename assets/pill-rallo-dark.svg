@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32" viewBox="0 0 160 32" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif">
+<rect x=".5" y=".5" width="159" height="31" rx="15.5" fill="#151b23" stroke="#3d444d"/>
+<g transform="translate(14 8)" fill="#9198a1"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM5.78 8.75a9.64 9.64 0 0 0 1.36 4.65c.26.03.53.05.8.05.27 0 .54-.02.8-.05a9.64 9.64 0 0 0 1.36-4.65Zm4.82 0a11.1 11.1 0 0 1-.96 4.37 6.5 6.5 0 0 0 3.8-4.37Zm-8.04 0a6.5 6.5 0 0 0 3.8 4.37 11.1 11.1 0 0 1-.96-4.37Zm3.22-1.5h4.44A9.64 9.64 0 0 0 8.86 2.6a6.6 6.6 0 0 0-1.72 0 9.64 9.64 0 0 0-1.36 4.65Zm4.82 0h2.84a6.5 6.5 0 0 0-3.8-4.37c.53 1.17.87 2.67.96 4.37Zm-8.04 0h2.84c.09-1.7.43-3.2.96-4.37a6.5 6.5 0 0 0-3.8 4.37Z"/></g>
+<text x="38" y="20.5" font-size="13" font-weight="600" fill="#f0f6fc">rallocoach.com</text>
+</svg>

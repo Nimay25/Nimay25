@@ -149,9 +149,21 @@ function graphSvg(s, th, id) {
   });
   const rmax = Math.max(1, ...roll);
   // square-root scale: quieter stretches stay visible next to big spikes (no y-axis, so heights are relative)
-  const yOf = (v) => chB - 3 - Math.sqrt(v / rmax) * (chH - 14);
+  // then a light second pass so the curve eases into the baseline instead of meeting it in a sharp point
+  const sq = roll.map((v) => Math.sqrt(v / rmax));
+  const soft = sq.map((_, i) => {
+    let sum = 0, wsum = 0;
+    for (let k = -5; k <= 5; k++) {
+      if (sq[i + k] === undefined) continue;
+      const w = 6 - Math.abs(k);
+      sum += sq[i + k] * w; wsum += w;
+    }
+    return sum / wsum;
+  });
+  const smax = Math.max(1e-9, ...soft);
+  const yAt = soft.map((v) => chB - 3 - (v / smax) * (chH - 14));
   const PW = W - 12;
-  const pts = roll.map((v, i) => [(i / (n - 1)) * PW, yOf(v)]);
+  const pts = yAt.map((y, i) => [(i / (n - 1)) * PW, y]);
   let line = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
   for (let i = 1; i < n; i++) {
     const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2;

@@ -135,13 +135,21 @@ function graphSvg(s, th, id) {
   const xOf = (date) => Math.max(0, Math.min(W, ((new Date(date).getTime() - t0) / (t1 - t0)) * W));
   const ink = (c) => (th.inkShade ? mix(c, "#000000", th.inkShade) : c);
 
-  // 10-day rolling average, smoothed curve + area
+  // centered, triangle-weighted average (about 3 weeks wide) so bursts read as waves, not blocks
+  const SMOOTH = 12;
   const roll = days.map((_, i) => {
-    const w = days.slice(Math.max(0, i - 9), i + 1);
-    return w.reduce((a, d) => a + d.count, 0) / w.length;
+    let sum = 0, wsum = 0;
+    for (let k = -SMOOTH; k <= SMOOTH; k++) {
+      const d = days[i + k];
+      if (!d) continue;
+      const w = SMOOTH + 1 - Math.abs(k);
+      sum += d.count * w; wsum += w;
+    }
+    return sum / wsum;
   });
   const rmax = Math.max(1, ...roll);
-  const yOf = (v) => chB - 3 - (v / rmax) * (chH - 14);
+  // square-root scale: quieter stretches stay visible next to big spikes (no y-axis, so heights are relative)
+  const yOf = (v) => chB - 3 - Math.sqrt(v / rmax) * (chH - 14);
   const PW = W - 12;
   const pts = roll.map((v, i) => [(i / (n - 1)) * PW, yOf(v)]);
   let line = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;

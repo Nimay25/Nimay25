@@ -382,7 +382,6 @@ function graphSvg(s, th, id) {
 <g class="hdr">
 <text x="0" y="18" font-size="11" font-weight="600" fill="${th.muted}" letter-spacing="1.5">SHIPPING LOG · LAST 12 MONTHS</text>
 <text x="${W}" y="18" font-size="11" fill="${th.muted}" text-anchor="end">updated ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</text>
-<text x="${W}" y="36" font-size="11" fill="${th.muted}" text-anchor="end">Business student who builds things</text>
 </g>
 <text class="num" x="0" y="66" font-size="40" font-weight="800" fill="url(#num-${id})" letter-spacing="-1.2">${fmt(s.thisYear)}</text>
 <text class="rise" style="animation-delay:${f(T1 + .2)}s" x="${numW + 10}" y="66" font-size="14" fill="${th.muted}">contributions</text>
